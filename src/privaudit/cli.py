@@ -16,10 +16,35 @@ from .core import (
     read_events,
     run_loop,
 )
+from .style import resolve_style
 
 
 def _fmt_ts(ts: float) -> str:
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+
+
+# Kind badges: a consistent color per capture type so a user scanning a
+# long history can tell mic vs camera events apart by color alone -- one
+# glyph family (a plain three-letter label), color carries the
+# distinction, not a different icon/emoji per kind.
+_KIND_LABEL = {"mic": "MIC", "camera": "CAM"}
+
+
+def _kind_badge(style, kind: str) -> str:
+    label = _KIND_LABEL.get(kind, kind.upper())
+    if kind == "mic":
+        return style.cyan(label)
+    if kind == "camera":
+        return style.bold_yellow(label)
+    return label
+
+
+def _action_badge(style, action: str) -> str:
+    if action == "start":
+        return style.bold_green("start")
+    if action == "stop":
+        return style.dim("stop ")
+    return action
 
 
 def cmd_history(args) -> int:
@@ -34,18 +59,21 @@ def cmd_history(args) -> int:
         print(json.dumps([e.__dict__ for e in events], indent=2))
         return 0
 
+    style = resolve_style(no_color_flag=args.no_color)
+
     if not events:
-        print("No matching mic/camera access events recorded.")
+        print(style.dim("No matching mic/camera access events recorded."))
         return 0
 
     for e in events:
-        icon = "MIC" if e.kind == "mic" else "CAM"
-        pid_str = f" pid={e.pid}" if e.pid else ""
-        print(f"[{_fmt_ts(e.ts)}] {icon} {e.action:5s} {e.app_name}{pid_str}")
+        pid_str = style.dim(f" pid={e.pid}") if e.pid else ""
+        ts = style.dim(f"[{_fmt_ts(e.ts)}]")
+        print(f"{ts} {_kind_badge(style, e.kind)}  {_action_badge(style, e.action):<5}  {e.app_name}{pid_str}")
     return 0
 
 
 def cmd_watch(args) -> int:
+    style = resolve_style(no_color_flag=args.no_color)
     try:
         find_pw_dump()
     except PwDumpNotFound as exc:
@@ -53,10 +81,10 @@ def cmd_watch(args) -> int:
         return 2
 
     def on_event(e):
-        icon = "MIC" if e.kind == "mic" else "CAM"
-        print(f"[{_fmt_ts(e.ts)}] {icon} {e.action:5s} {e.app_name}")
+        ts = style.dim(f"[{_fmt_ts(e.ts)}]")
+        print(f"{ts} {_kind_badge(style, e.kind)}  {_action_badge(style, e.action):<5}  {e.app_name}")
 
-    print(f"Watching mic/camera activity via PipeWire (log: {args.log}). Ctrl+C to stop.")
+    print(style.dim(f"Watching mic/camera activity via PipeWire (log: {args.log}). Ctrl+C to stop."))
     try:
         run_loop(
             interval_seconds=args.interval,
@@ -82,12 +110,15 @@ def cmd_status(args) -> int:
     if args.json:
         print(json.dumps([n.__dict__ for n in active], indent=2))
         return 0
+
+    style = resolve_style(no_color_flag=args.no_color)
+
     if not active:
-        print("No app is currently capturing your microphone or camera.")
+        print(style.dim("No app is currently capturing your microphone or camera."))
         return 0
     for n in active:
-        icon = "MIC" if n.kind == "mic" else "CAM"
-        print(f"{icon} active: {n.app_name}" + (f" (pid={n.pid})" if n.pid else ""))
+        pid_str = style.dim(f" (pid={n.pid})") if n.pid else ""
+        print(f"{_kind_badge(style, n.kind)}  {style.bold(n.app_name)}{pid_str}")
     return 0
 
 
@@ -100,6 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    p.add_argument("--no-color", action="store_true", help="Disable colored output.")
     sub = p.add_subparsers(dest="command", required=True)
 
     p_watch = sub.add_parser("watch", help="Poll PipeWire and log mic/camera start/stop events")

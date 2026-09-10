@@ -107,7 +107,12 @@ def find_pw_dump() -> str:
 
 
 def run_pw_dump(pw_dump_bin: str, runner=subprocess.run, timeout: int = 15) -> list:
-    proc = runner([pw_dump_bin], capture_output=True, text=True, timeout=timeout, check=False)
+    try:
+        proc = runner([pw_dump_bin], capture_output=True, text=True, timeout=timeout, check=False)
+    except (subprocess.TimeoutExpired, OSError):
+        # A hung/missing pw-dump must not crash the long-running `watch`
+        # loop -- treat this poll as "no data" and let the next poll retry.
+        return []
     if proc.returncode != 0 or not proc.stdout:
         return []
     try:

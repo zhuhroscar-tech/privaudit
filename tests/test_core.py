@@ -84,6 +84,22 @@ def test_run_pw_dump_handles_garbage_json():
     assert run_pw_dump("pw-dump", runner=fake_runner) == []
 
 
+def test_run_pw_dump_handles_timeout_gracefully():
+    def fake_runner(cmd, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout", 15))
+
+    # A hung pw-dump must not raise out of run_pw_dump -- the long-running
+    # `watch` loop depends on this to survive a single bad poll.
+    assert run_pw_dump("pw-dump", runner=fake_runner) == []
+
+
+def test_run_pw_dump_handles_missing_binary_gracefully():
+    def fake_runner(cmd, **kwargs):
+        raise OSError("No such file or directory")
+
+    assert run_pw_dump("pw-dump", runner=fake_runner) == []
+
+
 def test_diff_snapshots_detects_start():
     prev = []
     curr = [CaptureNode(1, "mic", "Zoom")]

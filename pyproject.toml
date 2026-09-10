@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "privaudit"
+version = "0.1.0"
+description = "Local mic/camera access history for Linux, built on PipeWire — an OverSight/Android-privacy-dashboard equivalent"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "zhuhroscar-tech" }]
+requires-python = ">=3.9"
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Security",
+]
+
+[project.urls]
+Homepage = "https://github.com/zhuhroscar-tech/privaudit"
+
+[project.scripts]
+privaudit = "privaudit.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,3 +1,3 @@
 """privaudit: local mic/camera access history for Linux (PipeWire-based)."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

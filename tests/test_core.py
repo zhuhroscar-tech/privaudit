@@ -4,12 +4,15 @@ import subprocess
 from privaudit.core import (
     CaptureNode,
     Event,
+    PwDumpNotFound,
     append_events,
     diff_snapshots,
     filter_events,
+    find_pw_dump,
     parse_pw_dump,
     poll_once,
     read_events,
+    run_loop,
     run_pw_dump,
 )
 
@@ -164,3 +167,95 @@ def test_filter_events_by_kind_app_and_time():
     assert len(filter_events(events, kind="mic")) == 2
     assert len(filter_events(events, app_name="fire")) == 1
     assert len(filter_events(events, since_ts=15.0)) == 2
+
+
+def test_find_pw_dump_raises_when_missing(monkeypatch):
+    monkeypatch.setattr("privaudit.core.shutil.which", lambda name: None)
+    try:
+        find_pw_dump()
+        assert False, "expected PwDumpNotFound"
+    except PwDumpNotFound as exc:
+        assert "pw-dump not found" in str(exc)
+
+
+def test_find_pw_dump_returns_path_when_present(monkeypatch):
+    monkeypatch.setattr("privaudit.core.shutil.which", lambda name: "/usr/bin/pw-dump")
+    assert find_pw_dump() == "/usr/bin/pw-dump"
+
+
+def test_append_events_empty_list_is_noop(tmp_path):
+    log = tmp_path / "nested" / "history.jsonl"
+    append_events([], log_path=log)
+    assert not log.exists()
+
+
+def test_read_events_skips_blank_lines(tmp_path):
+    log = tmp_path / "history.jsonl"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text("\n" + Event(1.0, "mic", "start", "Zoom").to_json() + "\n\n")
+    events = read_events(log)
+    assert len(events) == 1
+    assert events[0].app_name == "Zoom"
+
+
+def test_run_loop_polls_logs_and_calls_on_event(tmp_path, monkeypatch):
+    log = tmp_path / "history.jsonl"
+    monkeypatch.setattr("privaudit.core.find_pw_dump", lambda: "/usr/bin/pw-dump")
+
+    calls = {"n": 0}
+
+    def fake_runner(cmd, capture_output, text, timeout, check):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            payload = json.dumps(
+                [
+                    {
+                        "id": 1,
+                        "type": "PipeWire:Interface:Node",
+                        "info": {
+                            "props": {
+                                "media.class": "Stream/Input/Audio",
+                                "application.name": "Zoom",
+                                "application.process.id": 111,
+                            }
+                        },
+                    }
+                ]
+            )
+        else:
+            payload = "[]"
+        return subprocess.CompletedProcess(cmd, 0, stdout=payload, stderr="")
+
+    seen_events = []
+    sleeps = []
+    run_loop(
+        interval_seconds=0.01,
+        log_path=log,
+        max_iterations=2,
+        sleep=lambda s: sleeps.append(s),
+        runner=fake_runner,
+        on_event=lambda e: seen_events.append(e),
+    )
+
+    assert calls["n"] == 2
+    # Only one sleep call: after iteration 1 (since max_iterations=2 stops
+    # the loop before a sleep would follow iteration 2).
+    assert sleeps == [0.01]
+    # Poll 1 sees Zoom start; poll 2 sees it stop (fake_runner returns "[]"
+    # the second time) -- both transitions are real events run_loop must log.
+    assert [e.action for e in seen_events] == ["start", "stop"]
+    assert all(e.app_name == "Zoom" for e in seen_events)
+    logged = read_events(log)
+    assert [e.action for e in logged] == ["start", "stop"]
+
+
+def test_run_loop_raises_when_pw_dump_missing(monkeypatch):
+    def raise_not_found():
+        raise PwDumpNotFound("pw-dump not found on PATH.")
+
+    monkeypatch.setattr("privaudit.core.find_pw_dump", raise_not_found)
+    try:
+        run_loop(max_iterations=1)
+        assert False, "expected PwDumpNotFound"
+    except PwDumpNotFound:
+        pass

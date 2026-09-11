@@ -97,3 +97,39 @@ def test_status_headline_supports_info_level():
     assert status_headline(s, "info", "Neutral note") == "[i] Neutral note"
     s2 = Style(True)
     assert "\033[2m" in status_headline(s2, "info", "Neutral note")
+
+
+def test_style_yellow_wraps_ansi():
+    from privaudit.style import Style
+
+    s = Style(True)
+    assert s.yellow("x") == "\033[33mx\033[0m"
+
+
+def test_print_fields_empty_rows_is_noop(capsys):
+    from privaudit.style import print_fields
+
+    print_fields([])
+    assert capsys.readouterr().out == ""
+
+
+def test_print_fields_aligns_columns(capsys):
+    from privaudit.style import print_fields
+
+    print_fields([("short", "1"), ("longer_label", "2")])
+    out = capsys.readouterr().out
+    lines = out.splitlines()
+    assert lines[0].startswith("  short")
+    assert lines[1].startswith("  longer_label")
+    # both labels are padded to the widest label's width, so the value
+    # column starts at the same character offset on every row
+    value_col = lines[1].index("2")
+    assert lines[0].index("1") == value_col
+
+
+def test_section_prints_blank_line_then_title(capsys):
+    from privaudit.style import section
+
+    section("Overview")
+    out = capsys.readouterr().out
+    assert out == "\nOverview\n"

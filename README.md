@@ -1,8 +1,19 @@
 # privaudit
 
+[![CI](https://github.com/zhuhroscar-tech/privaudit/actions/workflows/ci.yml/badge.svg)](https://github.com/zhuhroscar-tech/privaudit/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/zhuhroscar-tech/privaudit?include_prereleases&label=release)](https://github.com/zhuhroscar-tech/privaudit/releases)
+![Linux](https://img.shields.io/badge/platform-Linux-111111?logo=linux)
+
 Local mic/camera access history for Linux — the missing piece Android's
 "privacy dashboard" and macOS's [OverSight](https://objective-see.org/products/oversight.html)
 already give you, that no DE-agnostic Linux equivalent provides.
+
+## Simple explanation
+
+Keeps a private log on your own computer of every time an app used your
+microphone or camera, so you can check afterward whether anything you
+didn't expect turned them on. Nothing leaves your machine and nothing is
+muted, blocked, or reconfigured — it just tells you what happened.
 
 ## The problem
 

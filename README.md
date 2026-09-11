@@ -30,19 +30,7 @@ during a call, there's nothing to check.
 
 ## What this does
 
-```
-$ privaudit watch &
-Watching mic/camera activity via PipeWire (log: ~/.local/share/privaudit/history.jsonl). Ctrl+C to stop.
-
-$ privaudit history --since-hours 4
-[2026-09-10 14:02:11] MIC   start Zoom pid=48213
-[2026-09-10 14:44:57] MIC   stop  Zoom pid=48213
-[2026-09-10 15:10:03] CAM   start Firefox pid=1029
-[2026-09-10 15:10:44] CAM   stop  Firefox pid=1029
-
-$ privaudit status
-No app is currently capturing your microphone or camera.
-```
+![privaudit example output](docs/images/example-output.png)
 
 `privaudit watch` polls PipeWire's object graph every 2 seconds (configurable)
 and appends a JSON-lines event whenever an app starts or stops actively

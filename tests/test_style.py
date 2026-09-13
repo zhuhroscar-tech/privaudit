@@ -115,7 +115,7 @@ def test_print_fields_empty_rows_is_noop(capsys):
     assert capsys.readouterr().out == ""
 
 
-def test_print_fields_aligns_columns(capsys):
+def test_print_fields_aligns_columns_with_module_level_import(capsys):
     from privaudit.style import print_fields
 
     print_fields([("short", "1"), ("longer_label", "2")])
@@ -129,7 +129,7 @@ def test_print_fields_aligns_columns(capsys):
     assert lines[0].index("1") == value_col
 
 
-def test_section_prints_blank_line_then_title(capsys):
+def test_section_prints_blank_line_then_title_overview(capsys):
     from privaudit.style import section
 
     section("Overview")
@@ -156,7 +156,7 @@ def test_print_fields_empty_rows_prints_nothing(capsys):
     assert capsys.readouterr().out == ""
 
 
-def test_print_fields_aligns_columns(capsys):
+def test_print_fields_aligns_columns_module_level_style_import(capsys):
     print_fields([("short", "1"), ("a longer label", "2")])
     out = capsys.readouterr().out.splitlines()
     assert out[0].startswith("  short")
@@ -171,7 +171,7 @@ def test_print_fields_custom_indent(capsys):
     assert out.startswith("    k")
 
 
-def test_section_prints_blank_line_then_title(capsys):
+def test_section_prints_blank_line_then_title_diagnostics(capsys):
     section("Diagnostics")
     out = capsys.readouterr().out
     assert out == "\nDiagnostics\n"

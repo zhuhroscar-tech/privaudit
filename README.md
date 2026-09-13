@@ -60,7 +60,7 @@ pip install --user privaudit   # once published to PyPI
 Or grab the standalone `.pyz` from a GitHub Release (no pip/venv needed):
 
 ```bash
-curl -LO https://github.com/zhuhroscar-tech/privaudit/releases/download/v0.1.0/privaudit.pyz
+curl -LO https://github.com/zhuhroscar-tech/privaudit/releases/latest/download/privaudit.pyz
 python3 privaudit.pyz --help
 ```
 

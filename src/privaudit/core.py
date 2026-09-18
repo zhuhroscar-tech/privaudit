@@ -106,20 +106,32 @@ def find_pw_dump() -> str:
     return path
 
 
-def run_pw_dump(pw_dump_bin: str, runner=subprocess.run, timeout: int = 15) -> list:
+def run_pw_dump(pw_dump_bin: str, runner=subprocess.run, timeout: int = 15) -> Optional[list]:
+    """Run pw-dump and parse its JSON output.
+
+    Returns the parsed object list on success, or ``None`` if the poll
+    itself failed (hung/missing binary, non-zero exit, or unparseable
+    output). ``None`` is deliberately distinct from ``[]``: an empty list
+    means "pw-dump ran fine and reported zero objects" (a fact worth
+    diffing against), while ``None`` means "we don't actually know the
+    current state this round" -- the caller must NOT treat a failed poll
+    as equivalent to "nothing is capturing", or every transient pw-dump
+    hiccup would fabricate a false stop event (and a false start event on
+    the next successful poll) for an app that never actually stopped.
+    """
     try:
         proc = runner([pw_dump_bin], capture_output=True, text=True, timeout=timeout, check=False)
     except (subprocess.TimeoutExpired, OSError):
         # A hung/missing pw-dump must not crash the long-running `watch`
-        # loop -- treat this poll as "no data" and let the next poll retry.
-        return []
+        # loop -- report this poll as failed and let the next poll retry.
+        return None
     if proc.returncode != 0 or not proc.stdout:
-        return []
+        return None
     try:
         data = json.loads(proc.stdout)
     except json.JSONDecodeError:
-        return []
-    return data if isinstance(data, list) else []
+        return None
+    return data if isinstance(data, list) else None
 
 
 def _app_display_name(info: dict) -> str:
@@ -228,6 +240,7 @@ def filter_events(
 class PollResult:
     events: list
     active: list
+    poll_failed: bool = False
 
 
 def poll_once(
@@ -238,9 +251,17 @@ def poll_once(
 ) -> PollResult:
     pw_dump_bin = pw_dump_bin or find_pw_dump()
     objects = run_pw_dump(pw_dump_bin, runner=runner)
+    if objects is None:
+        # The poll itself failed (hung/missing pw-dump, non-zero exit, or
+        # unparseable output) -- we genuinely don't know the current state
+        # this round. Carry the previous active set forward unchanged and
+        # emit no events, rather than diffing against an empty snapshot and
+        # fabricating a false stop (and, on the next successful poll, a
+        # false start) for an app that never actually stopped capturing.
+        return PollResult(events=[], active=previous_active, poll_failed=True)
     current = parse_pw_dump(objects)
     events = diff_snapshots(previous_active, current, now=now)
-    return PollResult(events=events, active=current)
+    return PollResult(events=events, active=current, poll_failed=False)
 
 
 def run_loop(

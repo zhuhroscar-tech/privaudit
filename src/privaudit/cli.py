@@ -106,6 +106,13 @@ def cmd_status(args) -> int:
     from .core import parse_pw_dump, run_pw_dump
 
     objects = run_pw_dump(pw_dump_bin)
+    if objects is None:
+        # pw-dump itself failed (hung, missing, non-zero exit, bad JSON) --
+        # this is "we don't know", not "nothing is capturing". Reporting it
+        # as an empty active list would silently claim a false negative for
+        # a privacy-relevant check.
+        print("error: pw-dump poll failed (non-zero exit, timeout, or unparseable output)", file=sys.stderr)
+        return 2
     active = parse_pw_dump(objects)
     if args.json:
         print(json.dumps([n.__dict__ for n in active], indent=2))

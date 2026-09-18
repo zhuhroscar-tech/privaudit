@@ -77,14 +77,16 @@ def test_run_pw_dump_handles_failure_gracefully():
     def fake_runner(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="err")
 
-    assert run_pw_dump("pw-dump", runner=fake_runner) == []
+    # A non-zero exit is a FAILED poll, not "zero objects" -- None signals
+    # "unknown state", distinct from an empty list ("known: nothing here").
+    assert run_pw_dump("pw-dump", runner=fake_runner) is None
 
 
 def test_run_pw_dump_handles_garbage_json():
     def fake_runner(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout="not json", stderr="")
 
-    assert run_pw_dump("pw-dump", runner=fake_runner) == []
+    assert run_pw_dump("pw-dump", runner=fake_runner) is None
 
 
 def test_run_pw_dump_handles_timeout_gracefully():
@@ -93,14 +95,14 @@ def test_run_pw_dump_handles_timeout_gracefully():
 
     # A hung pw-dump must not raise out of run_pw_dump -- the long-running
     # `watch` loop depends on this to survive a single bad poll.
-    assert run_pw_dump("pw-dump", runner=fake_runner) == []
+    assert run_pw_dump("pw-dump", runner=fake_runner) is None
 
 
 def test_run_pw_dump_handles_missing_binary_gracefully():
     def fake_runner(cmd, **kwargs):
         raise OSError("No such file or directory")
 
-    assert run_pw_dump("pw-dump", runner=fake_runner) == []
+    assert run_pw_dump("pw-dump", runner=fake_runner) is None
 
 
 def test_diff_snapshots_detects_start():
@@ -135,6 +137,52 @@ def test_poll_once_returns_new_active_set():
     assert len(result.active) == 2
     assert len(result.events) == 2
     assert all(e.action == "start" for e in result.events)
+    assert result.poll_failed is False
+
+
+def test_poll_once_transient_failure_does_not_fabricate_stop_event():
+    """Regression test: a transient pw-dump failure (non-zero exit, timeout,
+    or garbage JSON) between two successful polls must NOT be diffed against
+    an empty snapshot. Before the fix, run_pw_dump returned [] on failure
+    indistinguishably from a real empty result, so poll_once would emit a
+    false 'stop' event for an app that never actually stopped capturing --
+    and a false 'start' event on the next successful poll, once the state
+    "flapped" back. This is a real false-positive/false-negative bug in a
+    privacy-audit tool's core detection path."""
+    previously_active = [CaptureNode(1, "mic", "Zoom", "zoom", 111)]
+
+    def failing_runner(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="pipewire busy")
+
+    result = poll_once(previously_active, pw_dump_bin="pw-dump", runner=failing_runner, now=100.0)
+    assert result.events == []
+    assert result.active == previously_active
+    assert result.poll_failed is True
+
+
+def test_poll_once_recovers_cleanly_after_transient_failure():
+    """After a failed poll, the NEXT successful poll must diff against the
+    carried-forward previous state, not against an empty one -- so a real
+    stop is still detected once it actually happens, and no phantom start
+    is fabricated for an app that was continuously active throughout."""
+    previously_active = [CaptureNode(1, "mic", "Zoom", "zoom", 111)]
+    calls = {"n": 0}
+
+    def flaky_then_stopped_runner(cmd, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="pipewire busy")
+        return subprocess.CompletedProcess(cmd, 0, stdout="[]", stderr="")
+
+    failed = poll_once(previously_active, pw_dump_bin="pw-dump", runner=flaky_then_stopped_runner, now=100.0)
+    assert failed.events == []
+    assert failed.active == previously_active
+
+    recovered = poll_once(failed.active, pw_dump_bin="pw-dump", runner=flaky_then_stopped_runner, now=101.0)
+    # Zoom really did stop by the second (successful) poll -- exactly one
+    # real stop event, not a spurious extra start+stop pair from the gap.
+    assert [(e.kind, e.action) for e in recovered.events] == [("mic", "stop")]
+    assert recovered.active == []
 
 
 def test_append_and_read_events_round_trip(tmp_path):

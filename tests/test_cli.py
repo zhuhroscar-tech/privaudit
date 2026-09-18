@@ -148,6 +148,18 @@ def test_cli_status_no_active_captures(monkeypatch, capsys):
     assert "No app is currently capturing" in capsys.readouterr().out
 
 
+def test_cli_status_reports_error_on_failed_poll(monkeypatch, capsys):
+    """A failed pw-dump poll (None) must surface as an explicit error, not
+    silently render as 'no active captures' -- those are different facts
+    for a privacy-audit tool."""
+    monkeypatch.setattr("privaudit.cli.find_pw_dump", lambda: "/usr/bin/pw-dump")
+    monkeypatch.setattr("privaudit.core.run_pw_dump", lambda pw_dump_bin: None)
+    rc = main(["status"])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "pw-dump poll failed" in err
+
+
 def test_cli_status_shows_active_captures_with_pid(monkeypatch, capsys):
     from privaudit.core import CaptureNode
 

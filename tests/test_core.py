@@ -129,6 +129,53 @@ def test_diff_snapshots_no_change_no_events():
     assert events == []
 
 
+def test_diff_snapshots_same_pid_same_id_is_still_continuity():
+    # Same node_id AND same pid across polls: genuinely the same ongoing
+    # capture session, not a recycled id -- must stay silent.
+    prev = [CaptureNode(1, "mic", "Zoom", pid=100)]
+    curr = [CaptureNode(1, "mic", "Zoom", pid=100)]
+    assert diff_snapshots(prev, curr, now=100.0) == []
+
+
+def test_diff_snapshots_detects_recycled_node_id_via_pid_change():
+    # PipeWire explicitly reuses freed node ids (pw_map_remove(): "the id
+    # may get re-used in the future"). If app A's capture node stops and
+    # app B's new capture node is assigned the SAME node_id before the next
+    # poll, node_id-only comparison sees "id 1 present in both snapshots"
+    # and wrongly treats it as one continuous, unchanged session -- losing
+    # both the real stop and the real start. A differing pid on the same
+    # node_id proves it is actually two different sessions.
+    prev = [CaptureNode(1, "mic", "Zoom", pid=100)]
+    curr = [CaptureNode(1, "mic", "Discord", pid=200)]
+    events = diff_snapshots(prev, curr, now=100.0)
+    assert len(events) == 2
+    stop = next(e for e in events if e.action == "stop")
+    start = next(e for e in events if e.action == "start")
+    assert stop.app_name == "Zoom" and stop.pid == 100
+    assert start.app_name == "Discord" and start.pid == 200
+    assert stop.ts == 100.0 and start.ts == 100.0
+
+
+def test_diff_snapshots_detects_recycled_node_id_via_kind_change():
+    # A recycled node_id can also switch capture kind (mic -> camera or
+    # vice versa) even if a pid happens to be unavailable on one side --
+    # kind mismatch alone is conclusive proof of a different session.
+    prev = [CaptureNode(1, "mic", "Zoom", pid=None)]
+    curr = [CaptureNode(1, "camera", "OBS", pid=None)]
+    events = diff_snapshots(prev, curr, now=50.0)
+    assert len(events) == 2
+    assert {e.action for e in events} == {"stop", "start"}
+
+
+def test_diff_snapshots_same_id_no_pid_either_side_assumes_continuity():
+    # Documented narrower limitation: when neither snapshot has a pid to
+    # compare, there is no reliable signal to detect a recycled id, so the
+    # same node_id/kind is still treated as continuity (previous behavior).
+    prev = [CaptureNode(1, "mic", "Zoom", pid=None)]
+    curr = [CaptureNode(1, "mic", "Zoom", pid=None)]
+    assert diff_snapshots(prev, curr, now=100.0) == []
+
+
 def test_poll_once_returns_new_active_set():
     def fake_runner(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(SAMPLE_PW_DUMP), stderr="")

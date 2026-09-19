@@ -174,15 +174,68 @@ def parse_pw_dump(objects: list) -> list:
     return nodes
 
 
+def _same_capture_session(prev_node: CaptureNode, curr_node: CaptureNode) -> bool:
+    """Decide whether the same node_id in two consecutive polls still refers
+    to the same capture session, rather than a *different* one that reused
+    a recycled id.
+
+    PipeWire node ids are not permanently unique: ``pw_map_remove()`` puts a
+    freed id back on a free list and explicitly documents "the id may get
+    re-used in the future" (see pipewire/src/pipewire/map.h), and real
+    consumers have hit exactly this -- e.g. xdg-desktop-portal-wlr issue
+    #381, where a torn-down stream's node_id was immediately reassigned to
+    an unrelated new stream. Comparing snapshots by node_id alone therefore
+    treats "app A stopped, id got reused by app B" as "nothing changed",
+    silently dropping both the real stop and the real start -- exactly the
+    kind of gap a mic/camera access history must not have.
+
+    We use pid as the distinguishing signal when both snapshots have one:
+    two different processes cannot share a pid at the same time, so a pid
+    mismatch on the same node_id proves the id was recycled. A kind
+    mismatch (mic vs camera) is likewise conclusive. When pid is missing on
+    either side we have no reliable signal and fall back to the previous
+    assume-continuity behavior -- a documented, narrower limitation rather
+    than a routine false negative.
+    """
+    if prev_node.kind != curr_node.kind:
+        return False
+    if prev_node.pid is not None and curr_node.pid is not None:
+        return prev_node.pid == curr_node.pid
+    return True
+
+
 def diff_snapshots(previous: list, current: list, now: Optional[float] = None) -> list:
-    """Compare two CaptureNode snapshots (by node_id) and emit start/stop events."""
+    """Compare two CaptureNode snapshots (by node_id) and emit start/stop events.
+
+    A node_id present in both snapshots is normally treated as an ongoing
+    capture (no event). If the two sides' pid/kind prove it is actually a
+    *different* session that reused a recycled node_id (see
+    ``_same_capture_session``), this emits a stop for the old session and a
+    start for the new one instead of silently treating it as unchanged.
+    """
     now = now if now is not None else time.time()
     prev_by_id = {n.node_id: n for n in previous}
     curr_by_id = {n.node_id: n for n in current}
 
     events = []
     for node_id, node in curr_by_id.items():
-        if node_id not in prev_by_id:
+        prev_node = prev_by_id.get(node_id)
+        if prev_node is None:
+            events.append(
+                Event(now, node.kind, "start", node.app_name, node.app_binary, node.pid, node_id)
+            )
+        elif not _same_capture_session(prev_node, node):
+            events.append(
+                Event(
+                    now,
+                    prev_node.kind,
+                    "stop",
+                    prev_node.app_name,
+                    prev_node.app_binary,
+                    prev_node.pid,
+                    node_id,
+                )
+            )
             events.append(
                 Event(now, node.kind, "start", node.app_name, node.app_binary, node.pid, node_id)
             )

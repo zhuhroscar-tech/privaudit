@@ -18,7 +18,7 @@ source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
-也可从 [Releases](https://github.com/zhuhroscar-tech/privaudit/releases) 下载 `privaudit.pyz`，运行 `python3 privaudit.pyz --help`。这种方式不需要 pip 安装，但仍需 PipeWire 和 Python。
+也可从 [Releases](https://github.com/zhuhroscar-tech/privaudit/releases) 下载 `privaudit.pyz`，运行 `python3 privaudit.pyz --help`。这种方式不需要 pip 安装，但仍需 PipeWire 和 Python。发布历史记录在 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 快速上手
 

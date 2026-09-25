@@ -65,6 +65,15 @@ def test_ci_builds_installable_artifacts_and_smoke_tests_zipapp():
     assert "dist/privaudit.pyz --version" in ci
     assert "sha256sum" in ci
     assert "actions/upload-artifact@v4" in ci
+    assert 'tags: ["v*"]' in ci
+
+
+def test_project_urls_link_maintenance_resources():
+    pyproject = _read("pyproject.toml")
+
+    assert 'Homepage = "https://github.com/zhuhroscar-tech/privaudit"' in pyproject
+    assert 'Issues = "https://github.com/zhuhroscar-tech/privaudit/issues"' in pyproject
+    assert 'Changelog = "https://github.com/zhuhroscar-tech/privaudit/blob/main/CHANGELOG.md"' in pyproject
 
 
 def test_codeql_workflow_is_present_for_static_analysis():

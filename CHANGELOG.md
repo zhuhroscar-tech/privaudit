@@ -2,6 +2,13 @@
 
 All notable changes to `privaudit` are documented here.
 
+## v0.1.9 — Package resource links
+
+- Added Issues and Changelog project URLs to the Python package metadata.
+- Made CI run explicitly on `v*` release tags as well as main pushes and pull requests.
+- Added repository-contract coverage so package resource links and release-tag CI remain discoverable and wired.
+- Bumped the package/runtime version to `0.1.9`.
+
 ## v0.1.8 — Repository completeness contracts
 
 - Added this changelog and linked release history from both READMEs.

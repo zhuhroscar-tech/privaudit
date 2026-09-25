@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "privaudit"
-version = "0.1.8"
+version = "0.1.9"
 description = "Local mic/camera access history for Linux, built on PipeWire — an OverSight/Android-privacy-dashboard equivalent"
 readme = "README.md"
 license = "MIT"
@@ -21,6 +21,8 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/zhuhroscar-tech/privaudit"
+Issues = "https://github.com/zhuhroscar-tech/privaudit/issues"
+Changelog = "https://github.com/zhuhroscar-tech/privaudit/blob/main/CHANGELOG.md"
 
 [project.scripts]
 privaudit = "privaudit.cli:main"
